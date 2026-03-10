@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>X Music Player</title>
+<style>
+  body { margin:0; font-family:'Segoe UI', sans-serif; background:black; color:white; }
+  .player-container { max-width:400px; margin:0 auto; text-align:center; position:relative; }
+  .blur-bg { position:fixed; top:0; left:0; width:100%; height:100%; background-size:cover; filter:blur(20px); z-index:-1; }
+  .album-art { width:300px; height:300px; border-radius:20px; object-fit:cover; margin:40px 0 20px; box-shadow:0 10px 30px rgba(0,0,0,0.5); transition:all 0.5s ease; }
+  .song-title { font-size:24px; font-weight:bold; }
+  .song-artist { font-size:18px; color:#aaa; margin-bottom:20px; }
+  .controls { display:flex; justify-content:center; gap:20px; margin-bottom:20px; }
+  .controls button { background:none; border:none; color:white; font-size:30px; cursor:pointer; transition:transform 0.2s; }
+  .controls button:hover { transform:scale(1.2); }
+  .seek-bar { width:80%; margin:10px auto 20px; }
+  .equalizer { margin-bottom:20px; }
+  select { background:#222; color:white; border:none; padding:10px; border-radius:10px; }
+  .playlist { max-height:200px; overflow-y:auto; margin-bottom:20px; }
+  .playlist-item { cursor:pointer; padding:10px; border-bottom:1px solid #333; transition:background 0.2s; }
+  .playlist-item:hover { background:#222; }
+  .import-buttons { display:flex; justify-content:center; gap:10px; margin-bottom:20px; }
+  .import-buttons button { padding:10px 15px; border:none; border-radius:8px; background:#444; color:white; cursor:pointer; }
+  .import-buttons button:hover { background:#666; }
+</style>
+</head>
+<body>
+
+<div class="blur-bg" id="blurBg"></div>
+
+<div class="player-container">
+  <img id="albumArt" class="album-art" src="https://via.placeholder.com/300" alt="Album Art">
+  <div class="song-title" id="songTitle">Song Title</div>
+  <div class="song-artist" id="songArtist">Artist Name</div>
+
+  <div class="controls">
+    <button id="prev">&#9664;&#9664;</button>
+    <button id="play">&#9654;</button>
+    <button id="next">&#9654;&#9654;</button>
+  </div>
+
+  <input type="range" id="seekBar" class="seek-bar" min="0" max="100" value="0">
+
+  <div class="equalizer">
+    <label for="eqSelect">Equalizer: </label>
+    <select id="eqSelect">
+      <option value="normal">Normal</option>
+      <option value="bass">Bass Boost</option>
+      <option value="treble">Treble Boost</option>
+      <option value="rock">Rock</option>
+      <option value="pop">Pop</option>
+    </select>
+  </div>
+
+  <div class="import-buttons">
+    <button id="importSpotify">Import Spotify</button>
+    <button id="importYouTube">Import YouTube</button>
+    <button id="importAudiomack">Import Audiomack</button>
+  </div>
+
+  <div class="playlist" id="playlist"></div>
+
+</div>
+
+<script>
+/* --- SONG DATA --- */
+let songs = [
+  {title:"Song 1", artist:"Artist 1", file:"song1.mp3", albumArt:"https://via.placeholder.com/300/ff0000"},
+  {title:"Song 2", artist:"Artist 2", file:"song2.mp3", albumArt:"https://via.placeholder.com/300/00ff00"},
+  {title:"Song 3", artist:"Artist 3", file:"song3.mp3", albumArt:"https://via.placeholder.com/300/0000ff"}
+];
+
+/* --- WEB AUDIO API SETUP --- */
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const audioElement = new Audio();
+audioElement.crossOrigin = "anonymous";
+const track = audioCtx.createMediaElementSource(audioElement);
+
+const bass = audioCtx.createBiquadFilter(); bass.type="lowshelf"; bass.frequency.value=200; bass.gain.value=0;
+const mid = audioCtx.createBiquadFilter(); mid.type="peaking"; mid.frequency.value=1000; mid.gain.value=0;
+const treble = audioCtx.createBiquadFilter(); treble.type="highshelf"; treble.frequency.value=3000; treble.gain.value=0;
+
+track.connect(bass); bass.connect(mid); mid.connect(treble); treble.connect(audioCtx.destination);
+
+/* --- VARIABLES --- */
+let currentIndex=0; let isPlaying=false;
+const playBtn=document.getElementById('play');
+const prevBtn=document.getElementById('prev');
+const nextBtn=document.getElementById('next');
+const songTitle=document.getElementById('songTitle');
+const songArtist=document.getElementById('songArtist');
+const albumArt=document.getElementById('albumArt');
+const blurBg=document.getElementById('blurBg');
+const seekBar=document.getElementById('seekBar');
+const playlistEl=document.getElementById('playlist');
+const eqSelect=document.getElementById('eqSelect');
+const importSpotifyBtn=document.getElementById('importSpotify');
+const importYouTubeBtn=document.getElementById('importYouTube');
+const importAudiomackBtn=document.getElementById('importAudiomack');
+
+/* --- LOAD PLAYLIST --- */
+function renderPlaylist(){
+  playlistEl.innerHTML="";
+  songs.forEach((song,index)=>{
+    const div=document.createElement('div');
+    div.classList.add('playlist-item');
+    div.textContent=song.title+" - "+song.artist;
+    div.addEventListener('click',()=>loadSong(index));
+    playlistEl.appendChild(div);
+  });
+}
+renderPlaylist();
+
+/* --- LOAD SONG --- */
+function loadSong(index){
+  currentIndex=index;
+  const song=songs[index];
+  audioElement.src=song.file;
+  songTitle.textContent=song.title;
+  songArtist.textContent=song.artist;
+  albumArt.src=song.albumArt;
+  blurBg.style.backgroundImage=`url(${song.albumArt})`;
+  playSong();
+}
+
+/* --- PLAY/PAUSE --- */
+function playSong(){ audioCtx.resume(); audioElement.play(); isPlaying=true; playBtn.innerHTML="&#10074;&#10074;";}
+function pauseSong(){ audioElement.pause(); isPlaying=false; playBtn.innerHTML="&#9654;";}
+
+/* --- PREV/NEXT --- */
+function prevSong(){ currentIndex=(currentIndex-1+songs.length)%songs.length; loadSong(currentIndex);}
+function nextSong(){ currentIndex=(currentIndex+1)%songs.length; loadSong(currentIndex);}
+
+/* --- EVENT LISTENERS --- */
+playBtn.addEventListener('click',()=>{if(isPlaying) pauseSong(); else playSong();});
+prevBtn.addEventListener('click',prevSong);
+nextBtn.addEventListener('click',nextSong);
+
+audioElement.addEventListener('timeupdate',()=>{seekBar.value=(audioElement.currentTime/audioElement.duration)*100;});
+seekBar.addEventListener('input',()=>{audioElement.currentTime=(seekBar.value/100)*audioElement.duration;});
+
+eqSelect.addEventListener('change',()=>{
+  switch(eqSelect.value){
+    case "bass": bass.gain.value=10; mid.gain.value=0; treble.gain.value=0; break;
+    case "treble": bass.gain.value=0; mid.gain.value=0; treble.gain.value=10; break;
+    case "rock": bass.gain.value=6; mid.gain.value=3; treble.gain.value=6; break;
+    case "pop": bass.gain.value=4; mid.gain.value=0; treble.gain.value=4; break;
+    default: bass.gain.value=0; mid.gain.value=0; treble.gain.value=0;
+  }
+});
+
+/* --- INITIAL SONG --- */
+loadSong(0);
+
+/* --- IMPORT PLAYLIST PLACEHOLDERS --- */
+importSpotifyBtn.addEventListener('click', async()=>{
+  alert("Connect to Spotify Web API here to fetch playlist and append to songs array");
+});
+importYouTubeBtn.addEventListener('click', async()=>{
+  alert("Connect to YouTube Data API here to fetch playlist and append to songs array");
+});
+importAudiomackBtn.addEventListener('click', async()=>{
+  alert("Connect to Audiomack API here to fetch playlist and append to songs array");
+});
+</script>
+</body>
+</html>
